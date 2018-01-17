@@ -159,43 +159,8 @@ score = model.evaluate(validation_data_x, validation_data_y, verbose=0)
 
 
 
-
-# lets assume we will train for a total of 1 million steps
-# this is just an example and you might want to change it
-steps = 1 * 10**3
-epi_step = 0
-nepisodes = 0
-
-state = sim.newGame(opt.tgt_y, opt.tgt_x)
-state_with_history = np.zeros((opt.hist_len, opt.state_siz))
-append_to_hist(state_with_history, rgb2gray(state.pob).reshape(opt.state_siz))
-next_state_with_history = np.copy(state_with_history)
-
-# for e in range(opt.eval_nepisodes):
-
-for step in range(steps):
-    if state.terminal or epi_step >= opt.early_stop:
-        if state.terminal:
-            print('target reached!')
-        else:
-            print('early stop')
-        epi_step = 0
-        nepisodes += 1
-        # reset the game
-        state = sim.newGame(opt.tgt_y, opt.tgt_x)
-        # and reset the history
-        state_with_history[:] = 0
-        append_to_hist(state_with_history, rgb2gray(state.pob).reshape(opt.state_siz))
-        next_state_with_history = np.copy(state_with_history)
-    
-    
-    
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # TODO: here you would let your agent take its action
-    #       remember
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
+def takeGreedyAction():
+    ### take action here
     if np.random.rand() <= epsilon:
         # this just gets a random action
         action = randrange(opt.act_num)
@@ -219,13 +184,113 @@ for step in range(steps):
     # mark next state as current state
     state_with_history = np.copy(next_state_with_history)
     state = next_state
+
+
+# def QnetTrainStep():
     
-    
-    
-    
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # TODO: here you would train your agent
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#     return loss
+
+
+# def drawMap():
+#     if opt.disp_on:
+#         # plt.ion()
+#         if win_all is None:
+#             plt.subplot(121)
+#             win_all = plt.imshow(state.screen)
+#             plt.subplot(122)
+#             win_pob = plt.imshow(state.pob)
+#         else:
+#             win_all.set_data(state.screen)
+#             win_pob.set_data(state.pob)
+#         # time.sleep(0.1)
+#         plt.pause(opt.disp_interval)
+#         plt.draw()
+
+### 
+### TRAINING
+###
+
+# lets assume we will train for a total of 1 million steps
+# this is just an example and you might want to change it
+steps = 1 * 10**3
+epi_step = 0
+nepisodes = 0
+
+state = sim.newGame(opt.tgt_y, opt.tgt_x)
+state_with_history = np.zeros((opt.hist_len, opt.state_siz))
+append_to_hist(state_with_history, rgb2gray(state.pob).reshape(opt.state_siz))
+next_state_with_history = np.copy(state_with_history)
+
+### go over some episodes, apply learning after each
+for e in range(opt.eval_nepisodes):
+
+    # reset the environment
+    epi_step = 0
+    nepisodes += 1
+    # reset the game
+    state = sim.newGame(opt.tgt_y, opt.tgt_x)
+    # and reset the history
+    state_with_history[:] = 0
+    append_to_hist(state_with_history, rgb2gray(state.pob).reshape(opt.state_siz))
+    next_state_with_history = np.copy(state_with_history)
+
+    max_step = 0
+    ### go for certain steps in each episode
+    for step in range(steps):
+        ### goal check or max_step
+        if state.terminal or epi_step >= opt.early_stop:
+            max_step = step
+            # if state.terminal:
+                # print('target reached! | step:\t', step)
+            # else:
+                # print('early stop!')
+            # TODO: apply learning here
+            break
+        
+        ### take action here
+        if np.random.rand() <= epsilon:
+            # this just gets a random action
+            action = randrange(opt.act_num)
+            action_onehot = trans.one_hot_action(action)
+            #print('random action:\t', action)
+        else:
+            # make a Qnet prediction here based on the current state <x>
+            input_state = np.reshape(state_with_history, (1, opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
+            q_actions = qnet.predict(input_state, batch_size=None, verbose=0)
+            # get the action which corresponds to the max Q value (action = argmax)
+            action = np.argmax(q_actions)
+            action_onehot = trans.one_hot_action(action)
+            #print('Qnet action:\t', action)
+
+        next_state = sim.step(action)
+
+        # append to history
+        append_to_hist(next_state_with_history, rgb2gray(next_state.pob).reshape(opt.state_siz))
+        # add to the transition table
+        trans.add(state_with_history.reshape(-1), action_onehot, next_state_with_history.reshape(-1), next_state.reward, next_state.terminal)
+        # mark next state as current state
+        state_with_history = np.copy(next_state_with_history)
+        state = next_state
+        
+
+        # takeGreedyAction()
+        if opt.disp_on:
+            # plt.ion()
+            if win_all is None:
+                plt.subplot(121)
+                win_all = plt.imshow(state.screen)
+                plt.subplot(122)
+                win_pob = plt.imshow(state.pob)
+            else:
+                win_all.set_data(state.screen)
+                win_pob.set_data(state.pob)
+            # time.sleep(0.1)
+            plt.pause(opt.disp_interval)
+            plt.draw()
+        # drawMap()
+
+
+    # print('calculating loss...')
 
     state_batch, action_batch, next_state_batch, reward_batch, terminal_batch = trans.sample_minibatch()
     # state_batch           : gives current state
@@ -245,7 +310,6 @@ for step in range(steps):
     # print('next_state shape:\t', next_state_batch.shape)
     # print('action shape:\t', action_batch.shape)
 
-    # TODO: sum up over the batches
     # predict the Q values for the actions a' from the next_state s' 
     q_next_batch = qnet.predict(next_state_batch, batch_size = opt.minibatch_size)
     #print('Q prediction shape:\n', q_next_batch.shape)
@@ -274,12 +338,21 @@ for step in range(steps):
     # fit the Qnet to the evolved Q values
     qnet.fit(state_batch, q_current_batch, epochs=1, verbose=0)
 
+    # update epsilon
+    if epsilon > epsilon_min:
+        epsilon *= epsilon_decay
+
     # calculate the loss for output
     loss = np.sum(np.power(q_target_batch - q_selected_batch, 2))
 
+
+
+    # qnet_loss = QnetTrainStep()
+
     # print('loss shape:\t', loss.shape)
     # print(loss)
-    print('step: {:>4}/{} | loss: {:.5f}'.format(step, steps, loss))
+    print('episode: {:>4}/{} | loss: {:>7.4f} | step: {:>4} | epsilon {:>2.2f}'.format(e, opt.eval_nepisodes, loss, step, epsilon))
+    
 
     ### finished here
 
@@ -297,19 +370,7 @@ for step in range(steps):
     
     # TODO every once in a while you should test your agent here so that you can track its performance
 
-    if opt.disp_on:
-        plt.ion()
-        if win_all is None:
-            plt.subplot(121)
-            win_all = plt.imshow(state.screen)
-            plt.subplot(122)
-            win_pob = plt.imshow(state.pob)
-        else:
-            win_all.set_data(state.screen)
-            win_pob.set_data(state.pob)
-        # time.sleep(0.1)
-        plt.pause(opt.disp_interval)
-        plt.draw()
+
 
 
 # 2. perform a final test of your model and save it
