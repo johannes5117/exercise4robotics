@@ -19,7 +19,7 @@ from simulator import Simulator
 from transitionTable import TransitionTable
 
 
-### hyperparameters
+### HYPERPARAMETERS
 
 # learning rate of the optimizer, here adaptive
 learning_rate = 0.2
@@ -49,8 +49,7 @@ stats_output = True
 state_txt_output = False
 
 
-
-
+### helper functions
 def append_to_hist(state, obs):
     """
     Add observation to the state.
@@ -59,50 +58,11 @@ def append_to_hist(state, obs):
         state[i, :] = state[i+1, :]
     state[-1, :] = obs
 
-
-# 0. initialization
-opt = Options()
-sim = Simulator(opt.map_ind, opt.cub_siz, opt.pob_siz, opt.act_num)
-# setup a large transitiontable that is filled during training
-maxlen = 100000
-trans = TransitionTable(opt.state_siz, opt.act_num, opt.hist_len,
-                        opt.minibatch_size, maxlen)
-
-if opt.disp_on:
-    win_all = None
-    win_pob = None
-
-
-historyLength = opt.hist_len
-num_classes = 5  # 0 = no action / 1 = up / 2 = down / 3 = left / 4 = right
-
-### define network here
-print('\n... setting up Qnet ...')
-print('input shape:\t{}*{}*{}\n'.format(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
-
-qnet = Sequential()
-# qnet.add(Conv2D(64, kernel_size=(3, 3),
-#                 activation='relu',
-#                 input_shape=(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength)))
-# qnet.add(Flatten())
-qnet.add(Dense(128, activation='relu', input_shape=(opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz * historyLength,)))
-qnet.add(Dense(256, activation='relu'))
-qnet.add(Dense(256, activation='relu'))
-qnet.add(Dense(num_classes, activation='softmax'))
-
-qnet.compile(loss='mse',
-              optimizer=keras.optimizers.Adadelta(),
-              metrics=['accuracy'])
-configstr = '... hyperparams ...\ngamma:\t\t{}\nepsilon:\t{}\nepsilon min:\t{}\nepsilon decay:\t{}\nbatch processing:\t{}\n'.format(
-    gamma, epsilon, epsilon_min, epsilon_decay, batch_processing)
-print(configstr)
-print('> network compiled')
-
-
+# reformat data for network input
 def reshapeInputData(input_batch, no_batches):
     if use_convolutions:
         input_batch = input_batch.reshape((no_batches, historyLength, opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz))
-        # reformat input data if convolutions used (consistent with visual map)
+        # reformat input data if convolutions are used (consistent with visual map)
         input_batch = np.rot90(input_batch, axes=(1, 2))
         input_batch = np.rot90(input_batch, axes=(2, 3))
         # rotate mapview 180 degree
@@ -113,7 +73,7 @@ def reshapeInputData(input_batch, no_batches):
     return input_batch
     
 
-# function to export state with history to txt for debugging
+# export state with history to file for debugging
 def saveStateAsTxt(state_array):
     state_array[state_array > 200] = 4
     state_array[state_array > 100] = 3
@@ -133,13 +93,52 @@ def saveStateAsTxt(state_array):
         print(string, file=textfile)
 
 
+### INITIALIZATION
+opt = Options()
+sim = Simulator(opt.map_ind, opt.cub_siz, opt.pob_siz, opt.act_num)
+# setup a large transitiontable that is filled during training
+maxlen = 100000
+trans = TransitionTable(opt.state_siz, opt.act_num, opt.hist_len,
+                        opt.minibatch_size, maxlen)
+
+if opt.disp_on:
+    win_all = None
+    win_pob = None
+
+
+historyLength = opt.hist_len
+num_classes = 5
+
+
+### NETWORK DEFINITION
+print('\n... setting up Qnet ...')
+print('input shape:\t{}*{}*{}\n'.format(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
+
+qnet = Sequential()
+# qnet.add(Conv2D(64, kernel_size=(3, 3),
+#                 activation='relu',
+#                 input_shape=(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength)))
+# qnet.add(Flatten())
+qnet.add(Dense(128, activation='relu', input_shape=(opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz * historyLength,)))
+qnet.add(Dense(256, activation='relu'))
+qnet.add(Dense(256, activation='relu'))
+qnet.add(Dense(num_classes, activation='softmax'))
+
+qnet.compile(loss='mse',
+              optimizer=keras.optimizers.Adadelta(),
+              metrics=['accuracy'])
+
+configstr = '... hyperparams ...\ngamma:\t\t{}\nepsilon:\t{}\nepsilon min:\t{}\nepsilon decay:\t{}\nbatch processing:\t{}\n'.format(
+    gamma, epsilon, epsilon_min, epsilon_decay, batch_processing)
+print(configstr)
+print('> network compiled')
+
+
 ### 
 ### TRAINING
 ###
 
 print('\n... training ...')
-
-steps = 1 * 10**2
 
 state = sim.newGame(opt.tgt_y, opt.tgt_x)
 state_with_history = np.zeros((opt.hist_len, opt.state_siz))
@@ -147,16 +146,17 @@ append_to_hist(state_with_history, rgb2gray(state.pob).reshape(opt.state_siz))
 next_state_with_history = np.copy(state_with_history)
 
 
+# some statistics
 loss = 0
 stats = np.zeros((opt.eval_nepisodes, 4))
 step = 0
-max_step = 0  # used for statistics
+max_step = 0
 max_last = 0
 
-### go over some episodes, apply learning after each
+### go over some episodes, apply learning
 for e in range(opt.eval_nepisodes):
 
-    # reset the environment
+    ### reset the environment
     # reset the game
     state = sim.newGame(opt.tgt_y, opt.tgt_x)
     # and reset the history
@@ -222,7 +222,6 @@ for e in range(opt.eval_nepisodes):
                 win_pob.set_data(state.pob)
             plt.pause(opt.disp_interval)
             plt.draw()
-            # time.sleep(2)
 
 
         ### training step: fit Qnet to Q values
