@@ -96,6 +96,7 @@ print('> network compiled')
 
 def reshapeInputData(input_batch, no_batches):
     input_batch = input_batch.reshape((no_batches, historyLength * opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz))
+    # reformat input data if convolutions used (consistent with visual map)
     # input_batch = np.rot90(input_batch, axes=(1, 2))
     # input_batch = np.rot90(input_batch, axes=(2, 3))
     # # rotate mapview 180 degree
@@ -106,11 +107,6 @@ def reshapeInputData(input_batch, no_batches):
 
 # function to export state with history to txt for debugging
 def saveStateAsTxt(state_array):
-    # 0 : stay
-    # 1 : up
-    # 2 : down
-    # 3 : left
-    # 4 : right
     state_array[state_array > 200] = 4
     state_array[state_array > 100] = 3
     state_array[state_array >  50] = 2
@@ -135,11 +131,7 @@ def saveStateAsTxt(state_array):
 
 print('\n... training ...')
 
-# lets assume we will train for a total of 1 million steps
-# this is just an example and you might want to change it
 steps = 1 * 10**2
-epi_step = 0
-nepisodes = 0
 
 state = sim.newGame(opt.tgt_y, opt.tgt_x)
 state_with_history = np.zeros((opt.hist_len, opt.state_siz))
@@ -157,7 +149,6 @@ max_last = 0
 for e in range(opt.eval_nepisodes):
 
     # reset the environment
-    nepisodes += 1
     # reset the game
     state = sim.newGame(opt.tgt_y, opt.tgt_x)
     # and reset the history
@@ -177,11 +168,11 @@ for e in range(opt.eval_nepisodes):
 
         ### take action here
             # movement correspondencies
-            # 0 = stay
-            # 1 = up
-            # 2 = down
-            # 3 = left
-            # 4 = right
+            # 0 : stay
+            # 1 : up
+            # 2 : down
+            # 3 : left
+            # 4 : right
         if np.random.rand() <= epsilon:
             # this just gets a random action
             action = randrange(opt.act_num)
