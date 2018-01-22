@@ -73,8 +73,8 @@ historyLength = opt.hist_len
 num_classes = 5  # 0 = no action / 1 = up / 2 = down / 3 = left / 4 = right
 
 ### define network here
-print('... setting up Qnet ...')
-print('input shape:\t{}*{}*{}'.format(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
+print('\n... setting up Qnet ...')
+print('input shape:\t{}*{}*{}\n'.format(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
 
 qnet = Sequential()
 # qnet.add(Conv2D(32, kernel_size=(3, 3),
@@ -88,7 +88,7 @@ qnet.add(Dense(num_classes, activation='linear'))
 qnet.compile(loss='mse',
               optimizer=keras.optimizers.Adadelta(),
               metrics=['accuracy'])
-configstr = '... hyperparams ...\ngamma:\t\t{}\nepsilon:\t{}\nepsilon min:\t{}\nepsilon decay:\t{}\nbatch processing:\t{}'.format(
+configstr = '... hyperparams ...\ngamma:\t\t{}\nepsilon:\t{}\nepsilon min:\t{}\nepsilon decay:\t{}\nbatch processing:\t{}\n'.format(
     gamma, epsilon, epsilon_min, epsilon_decay, batch_processing)
 print(configstr)
 print('> network compiled')
@@ -133,7 +133,7 @@ def saveStateAsTxt(state_array):
 ### TRAINING
 ###
 
-print('... training ...')
+print('\n... training ...')
 
 # lets assume we will train for a total of 1 million steps
 # this is just an example and you might want to change it
@@ -326,13 +326,13 @@ for e in range(opt.eval_nepisodes):
 
 
 ### save model and stats
-print('... training ended ...')
+print('... training ended ...\n')
 qnet.save('qnet.h5')
-print('> model saved')
+print('> qnet saved')
 if stats_output:
     timestamp = time.strftime('%Y_%m_%d_%H_%M_%S')
     filename = 'stats' + timestamp + '.txt'
     configstr += '\n' + qnet.to_yaml()
     np.savetxt(filename, stats, fmt='%1.3f', footer=configstr)
     print('> statistics exported')
-print('...finished!')
+print('\n...finished!')
