@@ -24,7 +24,7 @@ class Options:
         # this defines the goal positionw
         tgt_y = 5
         tgt_x = 5
-        early_stop = 75
+        early_stop = 120
     state_siz = (pob_siz * cub_siz) ** 2 # when use pob as input
     if change_tgt:
         tgt_y = None
@@ -34,7 +34,7 @@ class Options:
     # traing hyper params    
     hist_len = 4
     minibatch_size  = 32
-    eval_nepisodes  = 1 * 10**3
+    eval_nepisodes  = 1 * 10**2
 
 class State: # return tuples made easy
     def __init__(self, action, reward, screen, terminal, pob):
