@@ -77,6 +77,7 @@ for e in range(test_episodes):
         q_actions = dqn.predict(input_state, verbose=0)
         # get the action which corresponds to the max Q value (action = argmax)
         action = np.argmax(q_actions)
+        print('q actions:\t', q_actions)
         action_onehot = trans.one_hot_action(action)
 
         next_state = sim.step(action)
