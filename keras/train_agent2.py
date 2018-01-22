@@ -24,18 +24,22 @@ from transitionTable import TransitionTable
 # learning rate of the optimizer, here adaptive
 learning_rate = 0.2
 
+# learning rate of the Q function [0 = no learning, 1 = only consider rewards]
+alpha = 0.5
+
 # Q learning discount factor [0 = only weight current state, 1 = weight future reward only]
-gamma = 0.3
+gamma = 0.8
 
 # E-greedy exploration [0 = no exploration, 1 = strict exploration]
 epsilon = 1
-epsilon_min = 0.1
-epsilon_decay = 0.999
+epsilon_min = 0.2
+epsilon_decay = 0.9999
 
 training_start = 200  # total number of steps after which network training starts
 training_interval = 5    # number of steps between subsequent training steps
 
 batch_processing = True
+use_convolutions = False
 
 # debug output
 action_output = False
@@ -77,13 +81,14 @@ print('\n... setting up Qnet ...')
 print('input shape:\t{}*{}*{}\n'.format(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength))
 
 qnet = Sequential()
-# qnet.add(Conv2D(32, kernel_size=(3, 3),
+# qnet.add(Conv2D(64, kernel_size=(3, 3),
 #                 activation='relu',
 #                 input_shape=(opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz, historyLength)))
 # qnet.add(Flatten())
 qnet.add(Dense(128, activation='relu', input_shape=(opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz * historyLength,)))
 qnet.add(Dense(256, activation='relu'))
-qnet.add(Dense(num_classes, activation='linear'))
+qnet.add(Dense(256, activation='relu'))
+qnet.add(Dense(num_classes, activation='softmax'))
 
 qnet.compile(loss='mse',
               optimizer=keras.optimizers.Adadelta(),
@@ -95,13 +100,16 @@ print('> network compiled')
 
 
 def reshapeInputData(input_batch, no_batches):
-    input_batch = input_batch.reshape((no_batches, historyLength * opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz))
-    # reformat input data if convolutions used (consistent with visual map)
-    # input_batch = np.rot90(input_batch, axes=(1, 2))
-    # input_batch = np.rot90(input_batch, axes=(2, 3))
-    # # rotate mapview 180 degree
-    # input_batch = np.rot90(input_batch, axes=(1, 2))
-    # input_batch = np.rot90(input_batch, axes=(1, 2))
+    if use_convolutions:
+        input_batch = input_batch.reshape((no_batches, historyLength, opt.pob_siz * opt.cub_siz, opt.pob_siz * opt.cub_siz))
+        # reformat input data if convolutions used (consistent with visual map)
+        input_batch = np.rot90(input_batch, axes=(1, 2))
+        input_batch = np.rot90(input_batch, axes=(2, 3))
+        # rotate mapview 180 degree
+        input_batch = np.rot90(input_batch, axes=(1, 2))
+        input_batch = np.rot90(input_batch, axes=(1, 2))
+    else:
+        input_batch = input_batch.reshape((no_batches, historyLength * opt.pob_siz * opt.cub_siz * opt.pob_siz * opt.cub_siz))
     return input_batch
     
 
@@ -247,7 +255,7 @@ for e in range(opt.eval_nepisodes):
                     # calculate new q value
                     q_target = reward_i + ((1 - terminal_i[0]) * gamma * np.amax(q_next))
                     q_updated = np.copy(q_actual)  # IMPORTANT: otherwise only reference, e.g. both would be identical
-                    q_updated[0, action_index] = q_target
+                    q_updated[0, action_index] = (1 - alpha) * q_updated[0, action_index] + alpha * q_target
 
                     if q_output: print('q actual:\t{}\nq target:\t{}'.format(q_actual[0,:], q_updated[0,:]))
 
@@ -274,11 +282,12 @@ for e in range(opt.eval_nepisodes):
                 
                 # implementing the Q function below apply the reshape trick: (32,) -> (32, 1)
                 q_star = np.reshape(np.amax(q_next_batch, action_axis),(opt.minibatch_size, 1))
-                q_target_batch = np.copy(reward_batch) + (1-np.copy(terminal_batch)) * gamma * np.copy(q_star)
+                q_target_batch = (reward_batch) + (1-(terminal_batch)) * gamma * np.copy(q_star)
                 
                 # update the Q(s,a) value for the action a taken from state s to s'  /  gradually add future rewards using the Q function
                 q_updated_batch = np.copy(q_current_batch)
-                q_updated_batch[np.arange(opt.minibatch_size), action_index_batch] = np.copy(q_target_batch[:,0])  # dim trick here as well
+                q_updated_batch[np.arange(opt.minibatch_size), action_index_batch] = (1 - alpha) \
+                    * q_updated_batch[np.arange(opt.minibatch_size), action_index_batch] + alpha * np.copy(q_target_batch[:,0])  # dim trick here as well
                 
                 if q_output: print('q actual:\n{}\nq target:\n{}'.format(q_current_batch, q_updated_batch))
 
